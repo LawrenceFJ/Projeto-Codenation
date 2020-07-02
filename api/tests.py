@@ -24,7 +24,7 @@ class BaseViewTest(APITestCase):
 
 class GetAllErrors(BaseViewTest):
     def test_get_all_errors(self):
-        response = self.client.get(reverse('get-all-errors'))
+        response = self.client.get(reverse('list-all-errors'))
         expect = ErrorLog.objects.all()
         serialized = ErrorLogSerializer(expect, many=True)
         self.assertEqual(response.data, serialized.data)

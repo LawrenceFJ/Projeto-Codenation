@@ -5,10 +5,10 @@ from .models import User, ErrorLog
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ('email', 'password')
+        fields = ('id', 'email', 'password')
 
 
 class ErrorLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ErrorLog
-        fields = ('description', 'details', 'origin', 'date', 'level', 'user')
+        fields = ('id', 'description', 'details', 'origin', 'date', 'level', 'user')
