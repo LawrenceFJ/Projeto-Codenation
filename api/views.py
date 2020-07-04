@@ -16,9 +16,79 @@ from .serializers import UserSerializer, ErrorLogSerializer
 class ListAllUser(generics.ListAPIView):
     """
     GET users/
+    POST users/     (registrar usuario)
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            # return JWT
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SelectedUser(generics.ListAPIView):
+    """
+    GET users/:id/
+    PUT users/:id/
+    DELETE users/:id/
+    """
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+    def get(self, request, *args, **kwargs):
+        try:
+            a_user = User.objects.get(pk=kwargs['pk'])
+            serializer = UserSerializer(a_user)
+            return Response(serializer.data)
+        except User.DoesNotExist:
+            return Response(
+                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def put(self, request, *args, **kwargs):
+        try:
+            a_user = self.queryset.get(pk=kwargs['pk'])
+            serializer = ErrorLogSerializer()
+            updated_user = serializer.update(a_user, request.data)
+            return Response(updated_user)
+        except User.DoesNotExist:
+            return Response(
+                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            a_user = self.queryset.get(pk=kwargs['pk'])
+            a_user.delete()
+        except User.DoesNotExist:
+            return Response(
+                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ListUserAllErrors(generics.ListAPIView):
+    """
+    GET users/:id/errors
+    """
+    queryset = ErrorLog.objects.all()
+    serializer_class = ErrorLogSerializer
+
+    def get(self, request, *args, **kwargs):
+        query = self.queryset.filter(user=kwargs['pk'])
+        serializer = ErrorLogSerializer(query, many=True)
+        if query:
+            return Response(serializer.data)
+        return Response(
+            data={"message": f"User with id={kwargs['pk']} does not exist."},
+            status=status.HTTP_404_NOT_FOUND
+        )
 
 
 ###########################################################
@@ -42,9 +112,11 @@ class ListCreateErrors(generics.ListAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SelectError(generics.ListAPIView):
+class SelectedError(generics.ListAPIView):
     """
     GET errors/:id/
+    GET errors/:level/
+
     PUT errors/:id/
     DELETE errors/:id/
     """
@@ -52,14 +124,29 @@ class SelectError(generics.ListAPIView):
     serializer_class = ErrorLogSerializer
 
     def get(self, request, *args, **kwargs):
-        try:
-            a_error = self.queryset.get(pk=kwargs['pk'])
-            return Response(ErrorLogSerializer(a_error).data)
-        except ErrorLog.DoesNotExist:
-            return Response(
-                data={"message": f"Error Log id={kwargs['pk']} does not exist."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        LEVEL_CHOICES = ['critical', 'debug', 'error', 'warning', 'information']
+
+        # GET errors/:level/
+        if kwargs['pk'] in LEVEL_CHOICES:
+            a_error = self.queryset.filter(level=kwargs['pk'])
+            serializer = ErrorLogSerializer(a_error, many=True)
+            if not a_error:
+                return Response(
+                    data={"message": f"Errors with level:{kwargs['pk']} does not have entries."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            return Response(serializer.data)
+
+        # GET errors/:id/
+        else:  # kwargs['pk'] is a number
+            try:
+                a_error = self.queryset.get(pk=kwargs['pk'])
+                return Response(ErrorLogSerializer(a_error).data)
+            except (ErrorLog.DoesNotExist, ValueError):
+                return Response(
+                    data={"message": f"Error Log id={kwargs['pk']} does not exist."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
     def put(self, request, *args, **kwargs):
         try:
