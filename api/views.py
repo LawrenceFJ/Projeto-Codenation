@@ -1,41 +1,81 @@
-from django.shortcuts import render
-from rest_framework import generics
+from rest_framework import generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import status
+from rest_framework_jwt.settings import api_settings
+from django.contrib.auth import authenticate
+
 from .models import User, ErrorLog
-from .serializers import UserSerializer, ErrorLogSerializer
+from .serializers import UserSerializer, ErrorLogSerializer, TokenSerializer
 
 
 # Create your views here.
+
+
+jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
+jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
 
 ###########################################################
 ##################  USER VIEWS  ###########################
 ###########################################################
 
 
-class ListAllUser(generics.ListAPIView):
+class RegisterUser(generics.CreateAPIView):
     """
-    GET users/
-    POST users/     (registrar usuario)
+    POST register/
     """
+    queryset = User.objects.all()
+
+    def post(self, request, *args, **kwargs):
+        if request.data['passcode'] == 'True':
+            return Response(data={'Message': 'Successfully Registered',
+                                  'Email': request.data['email']},
+                            status=status.HTTP_201_CREATED)
+        return Response(data={'Message': 'Invalid Passcode'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserLogin(generics.CreateAPIView):
+    """
+    POST login/     (user log in)
+    """
+    permission_classes = (permissions.AllowAny, )
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
     def post(self, request, *args, **kwargs):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            # return JWT
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            email = request.data['email']
+            password = request.data['password']
+            user = authenticate(request, username=email, password=password)
+            if user:
+                try:
+                    serializer = TokenSerializer(data={
+                        "token": jwt_encode_handler(
+                            jwt_payload_handler(user)
+                        )})
+                    serializer.is_valid()
+                    return Response(data=serializer.data)
+                except Exception as e:
+                    raise e
+        except User.DoesNotExist:
+            return Response(data={'Message': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class SelectedUser(generics.ListAPIView):
+class GetAllUsers(generics.ListAPIView):
+    """
+    GET users/
+    """
+    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+
+
+class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
     """
     GET users/:id/
     PUT users/:id/
     DELETE users/:id/
     """
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
@@ -43,10 +83,10 @@ class SelectedUser(generics.ListAPIView):
         try:
             a_user = User.objects.get(pk=kwargs['pk'])
             serializer = UserSerializer(a_user)
-            return Response(serializer.data)
+            return Response(data=serializer.data, status=status.HTTP_201_CREATED)
         except User.DoesNotExist:
             return Response(
-                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                data={"Message": f"User with id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -58,7 +98,7 @@ class SelectedUser(generics.ListAPIView):
             return Response(updated_user)
         except User.DoesNotExist:
             return Response(
-                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                data={"Message": f"User with id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -68,15 +108,16 @@ class SelectedUser(generics.ListAPIView):
             a_user.delete()
         except User.DoesNotExist:
             return Response(
-                data={"message": f"User with id={kwargs['pk']} does not exist."},
+                data={"Message": f"User with id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
 
-class ListUserAllErrors(generics.ListAPIView):
+class ListUserAllLogs(generics.ListAPIView):
     """
-    GET users/:id/errors
+    GET users/:id/logs
     """
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
     serializer_class = ErrorLogSerializer
 
@@ -86,7 +127,7 @@ class ListUserAllErrors(generics.ListAPIView):
         if query:
             return Response(serializer.data)
         return Response(
-            data={"message": f"User with id={kwargs['pk']} does not exist."},
+            data={"Message": f"User with id={kwargs['pk']} does not exist."},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -96,11 +137,12 @@ class ListUserAllErrors(generics.ListAPIView):
 ###########################################################
 
 
-class ListCreateErrors(generics.ListAPIView):
+class ListCreateLog(generics.ListCreateAPIView):
     """
-    GET errors/
-    POST errors/
+    GET logs/
+    POST logs/
     """
+    permission_classes = (permissions.IsAuthenticated, )
     queryset = ErrorLog.objects.all()
     serializer_class = ErrorLogSerializer
 
@@ -112,14 +154,15 @@ class ListCreateErrors(generics.ListAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SelectedError(generics.ListAPIView):
+class SelectedLog(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET errors/:id/
-    GET errors/:level/
+    GET logs/:id/
+    GET logs/:level/
 
-    PUT errors/:id/
-    DELETE errors/:id/
+    PUT logs/:id/
+    DELETE logs/:id/
     """
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
     serializer_class = ErrorLogSerializer
 
@@ -132,7 +175,7 @@ class SelectedError(generics.ListAPIView):
             serializer = ErrorLogSerializer(a_error, many=True)
             if not a_error:
                 return Response(
-                    data={"message": f"Errors with level:{kwargs['pk']} does not have entries."},
+                    data={"Message": f"Errors with level:{kwargs['pk']} does not have entries."},
                     status=status.HTTP_404_NOT_FOUND
                 )
             return Response(serializer.data)
@@ -144,7 +187,7 @@ class SelectedError(generics.ListAPIView):
                 return Response(ErrorLogSerializer(a_error).data)
             except (ErrorLog.DoesNotExist, ValueError):
                 return Response(
-                    data={"message": f"Error Log id={kwargs['pk']} does not exist."},
+                    data={"Message": f"Error Log id={kwargs['pk']} does not exist."},
                     status=status.HTTP_404_NOT_FOUND
                 )
 
@@ -160,7 +203,7 @@ class SelectedError(generics.ListAPIView):
             return Response(data=ErrorLogSerializer(updated_error).data, status=status.HTTP_200_OK)
         except ErrorLog.DoesNotExist:
             return Response(
-                data={"message": f"Error Log id={kwargs['pk']} does not exist."},
+                data={"Message": f"Error Log id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -171,6 +214,6 @@ class SelectedError(generics.ListAPIView):
             return Response(status=status.HTTP_200_OK)
         except ErrorLog.DoesNotExist:
             return Response(
-                data={"message": f"Error Log id={kwargs['pk']} does not exist."},
+                data={"Message": f"Error Log id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
             )
