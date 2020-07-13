@@ -1,1 +1,1 @@
-web: gunicorn ecomm.wsgi --max-requests 1200
+web: gunicorn ProjetoCodenation.wsgi --max-requests 1200
