@@ -3,16 +3,17 @@ from rest_framework.response import Response
 from rest_framework.views import status
 from rest_framework_jwt.settings import api_settings
 from django.contrib.auth import authenticate
+from django.core.validators import validate_email, ValidationError
 
 from .models import User, ErrorLog
 from .serializers import UserSerializer, ErrorLogSerializer, TokenSerializer
-
 
 # Create your views here.
 
 
 jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
 jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
+
 
 ###########################################################
 ##################  USER VIEWS  ###########################
@@ -23,21 +24,34 @@ class RegisterUser(generics.CreateAPIView):
     """
     POST register/
     """
-    queryset = User.objects.all()
+    permission_classes = (permissions.AllowAny,)
 
     def post(self, request, *args, **kwargs):
-        if request.data['passcode'] == 'True':
-            return Response(data={'Message': 'Successfully Registered',
-                                  'Email': request.data['email']},
-                            status=status.HTTP_201_CREATED)
-        return Response(data={'Message': 'Invalid Passcode'}, status=status.HTTP_400_BAD_REQUEST)
+        email = request.data.get("email", "")
+        password = request.data.get("password", "")
+        name = request.data.get("name", "")
+        try:
+            user = User.objects.get(email=email)
+            return Response(data={"Message": "User email already exist"}, status=status.HTTP_409_CONFLICT)
+
+        except User.DoesNotExist:
+            try:
+                validate_email(email)
+                if not name.strip():
+                    raise ValueError
+                new_user = User.objects.create_user(email=email, password=password, name=name)
+                serializer = UserSerializer(new_user)
+                return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+            except (ValidationError, ValueError):
+                return Response(data={"Message": "User must have an valid email, name and password"},
+                                status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLogin(generics.CreateAPIView):
     """
     POST login/     (user log in)
     """
-    permission_classes = (permissions.AllowAny, )
+    permission_classes = (permissions.AllowAny,)
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
@@ -53,7 +67,7 @@ class UserLogin(generics.CreateAPIView):
                             jwt_payload_handler(user)
                         )})
                     serializer.is_valid()
-                    return Response(data=serializer.data)
+                    return Response(data=serializer.data, status=status.HTTP_200_OK)
                 except Exception as e:
                     raise e
         except User.DoesNotExist:
@@ -142,7 +156,7 @@ class ListCreateLog(generics.ListCreateAPIView):
     GET logs/
     POST logs/
     """
-    permission_classes = (permissions.IsAuthenticated, )
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
     serializer_class = ErrorLogSerializer
 

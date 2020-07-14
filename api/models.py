@@ -1,5 +1,5 @@
 from django.db import models
-from django.core.validators import validate_email, validate_ipv46_address
+from django.core.validators import validate_ipv46_address
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 
 # Create your models here.
@@ -51,7 +51,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser):
-    email = models.EmailField(validators=[validate_email], unique=True)
+    email = models.EmailField(unique=True)
     name = models.CharField(max_length=255)
     active = models.BooleanField(default=True)
     staff = models.BooleanField(default=False)  # a admin user; non super-user
