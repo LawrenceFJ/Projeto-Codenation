@@ -37,8 +37,6 @@ class RegisterUser(generics.CreateAPIView):
         except User.DoesNotExist:
             try:
                 validate_email(email)
-                if not name.strip():
-                    raise ValueError
                 new_user = User.objects.create_user(email=email, password=password, name=name)
                 serializer = UserSerializer(new_user)
                 return Response(data=serializer.data, status=status.HTTP_201_CREATED)
@@ -57,21 +55,23 @@ class UserLogin(generics.CreateAPIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            email = request.data['email']
-            password = request.data['password']
-            user = authenticate(request, username=email, password=password)
-            if user:
-                try:
-                    serializer = TokenSerializer(data={
-                        "token": jwt_encode_handler(
-                            jwt_payload_handler(user)
-                        )})
-                    serializer.is_valid()
-                    return Response(data=serializer.data, status=status.HTTP_200_OK)
-                except Exception as e:
-                    raise e
+            user = self.queryset.get(email=request.data['email'])
         except User.DoesNotExist:
             return Response(data={'Message': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
+
+        email = request.data['email']
+        password = request.data['password']
+        user = authenticate(request, username=email, password=password)
+
+        if user is not None:
+            serializer = TokenSerializer(data={
+                "token": jwt_encode_handler(
+                    jwt_payload_handler(user)
+                )})
+            serializer.is_valid()
+            return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+        return Response(data={'Message': 'Invalid Password'}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class GetAllUsers(generics.ListAPIView):
@@ -97,7 +97,7 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
         try:
             a_user = User.objects.get(pk=kwargs['pk'])
             serializer = UserSerializer(a_user)
-            return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+            return Response(data=serializer.data, status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response(
                 data={"Message": f"User with id={kwargs['pk']} does not exist."},
@@ -105,12 +105,27 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def put(self, request, *args, **kwargs):
-        try:
+        try:  # verifica se o usuario existe no banco.
             a_user = self.queryset.get(pk=kwargs['pk'])
-            serializer = ErrorLogSerializer()
-            updated_user = serializer.update(a_user, request.data)
-            return Response(updated_user)
-        except User.DoesNotExist:
+
+            try:    # verifica se no json tem o campo email. Se não estiver, raise KeyError.
+                validate_email(request.data['email'])   # valida o email do json. Se for invalido, raise ValidationError
+            except KeyError:
+                pass
+
+            # verifica se o name não contem letras, ex: name="   ".
+            if not request.data['name'].strip():
+                raise ValueError
+
+            serializer = UserSerializer()
+            serializer.update(a_user, request.data)
+            updated_user = self.queryset.get(pk=kwargs['pk'])
+            serializer = UserSerializer(updated_user)
+            return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+        except (User.DoesNotExist, ValueError, ValidationError) as e:
+            if e is ValueError or ValidationError:
+                return Response(data={"Message": "Invalid email or name"}, status=status.HTTP_400_BAD_REQUEST)
             return Response(
                 data={"Message": f"User with id={kwargs['pk']} does not exist."},
                 status=status.HTTP_404_NOT_FOUND
@@ -120,6 +135,7 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
         try:
             a_user = self.queryset.get(pk=kwargs['pk'])
             a_user.delete()
+            return Response(status=status.HTTP_200_OK)
         except User.DoesNotExist:
             return Response(
                 data={"Message": f"User with id={kwargs['pk']} does not exist."},
@@ -139,7 +155,7 @@ class ListUserAllLogs(generics.ListAPIView):
         query = self.queryset.filter(user=kwargs['pk'])
         serializer = ErrorLogSerializer(query, many=True)
         if query:
-            return Response(serializer.data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(
             data={"Message": f"User with id={kwargs['pk']} does not exist."},
             status=status.HTTP_404_NOT_FOUND
