@@ -5,8 +5,8 @@ from rest_framework_jwt.settings import api_settings
 from django.contrib.auth import authenticate
 from django.core.validators import validate_email, ValidationError
 
-from .models import User, ErrorLog
-from .serializers import UserSerializer, ErrorLogSerializer, TokenSerializer
+from .models import User, Agent, ErrorLog
+from .serializers import UserSerializer, AgentSerializer, ErrorLogSerializer, TokenSerializer
 
 # Create your views here.
 
@@ -22,7 +22,7 @@ jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
 
 class RegisterUser(generics.CreateAPIView):
     """
-    POST register/
+    POST api/register/
     """
     permission_classes = (permissions.AllowAny,)
 
@@ -47,7 +47,7 @@ class RegisterUser(generics.CreateAPIView):
 
 class UserLogin(generics.CreateAPIView):
     """
-    POST login/     (user log in)
+    POST api/login/     (user log in)
     """
     permission_classes = (permissions.AllowAny,)
     queryset = User.objects.all()
@@ -76,18 +76,18 @@ class UserLogin(generics.CreateAPIView):
 
 class GetAllUsers(generics.ListAPIView):
     """
-    GET users/
+    GET api/users/
     """
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = User.objects.all()
     serializer_class = UserSerializer
 
 
 class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET users/:id/
-    PUT users/:id/
-    DELETE users/:id/
+    GET api/users/:id/
+    PUT api/users/:id/
+    DELETE api/users/:id/
     """
     permission_classes = (permissions.IsAuthenticated,)
     queryset = User.objects.all()
@@ -142,22 +142,94 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+###########################################################
+###################  AGENT VIEWS  #########################
+###########################################################
 
-class ListUserAllLogs(generics.ListAPIView):
+
+class ListCreateAgent(generics.ListCreateAPIView):
     """
-    GET users/:id/logs
+    GET api/agents
+    POST api/agents
+    """
+    permission_classes = (permissions.IsAuthenticated,)
+    queryset = Agent.objects.all()
+    serializer_class = AgentSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = AgentSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class GetUpdateDeleteAgent(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET api/agents/:id/
+    PUT api/agents/:id/
+    DELETE api/agents/:id/
+    """
+    permission_classes = (permissions.IsAuthenticated,)
+    queryset = Agent.objects.all()
+    serializer_class = AgentSerializer
+
+    def get(self, request, *args, **kwargs):
+        try:
+            a_agent = self.queryset.get(pk=kwargs['pk'])
+            return Response(AgentSerializer(a_agent).data)
+        except (Agent.DoesNotExist, ValueError):
+            return Response(
+                data={"Message": f"Agent with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def put(self, request, *args, **kwargs):
+        try:
+            a_agent = self.queryset.get(pk=kwargs['pk'])
+            serializer = AgentSerializer()
+
+            try:
+                a_user = User.objects.get(pk=request.data['user'])
+                request.data['user'] = a_user
+            except KeyError:
+                pass
+
+            updated_error = serializer.update(a_agent, request.data)
+            return Response(data=AgentSerializer(updated_error).data, status=status.HTTP_200_OK)
+        except Agent.DoesNotExist:
+            return Response(
+                data={"Message": f"Agent with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    def delete(self, request, *args, **kwargs):
+        try:
+            a_agent = self.queryset.get(pk=kwargs['pk'])
+            a_agent.delete()
+            return Response(status=status.HTTP_200_OK)
+        except Agent.DoesNotExist:
+            return Response(
+                data={"Message": f"Agent with id={kwargs['pk']} does not exist."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class ListAgentAllLogs(generics.ListAPIView):
+    """
+    GET api/agents/:id/logs
     """
     permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
     serializer_class = ErrorLogSerializer
 
     def get(self, request, *args, **kwargs):
-        query = self.queryset.filter(user=kwargs['pk'])
+        query = self.queryset.filter(agent=kwargs['pk'])
         serializer = ErrorLogSerializer(query, many=True)
         if query:
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(
-            data={"Message": f"User with id={kwargs['pk']} does not exist."},
+            data={"Message": f"Agent with id={kwargs['pk']} does not exist."},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -169,8 +241,8 @@ class ListUserAllLogs(generics.ListAPIView):
 
 class ListCreateLog(generics.ListCreateAPIView):
     """
-    GET logs/
-    POST logs/
+    GET api/logs/
+    POST api/logs/
     """
     permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
@@ -184,13 +256,13 @@ class ListCreateLog(generics.ListCreateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class SelectedLog(generics.RetrieveUpdateDestroyAPIView):
+class GetUpdateDeleteLog(generics.RetrieveUpdateDestroyAPIView):
     """
-    GET logs/:id/
-    GET logs/:level/
+    GET api/logs/:id/
+    GET api/logs/:level/
 
-    PUT logs/:id/
-    DELETE logs/:id/
+    PUT api/logs/:id/
+    DELETE api/logs/:id/
     """
     permission_classes = (permissions.IsAuthenticated,)
     queryset = ErrorLog.objects.all()
@@ -226,8 +298,11 @@ class SelectedLog(generics.RetrieveUpdateDestroyAPIView):
             a_error = self.queryset.get(pk=kwargs['pk'])
             serializer = ErrorLogSerializer()
 
-            a_user = User.objects.get(pk=request.data['user'])
-            request.data['user'] = a_user
+            try:
+                a_agent = Agent.objects.get(pk=request.data['agent'])
+                request.data['agent'] = a_agent
+            except KeyError:
+                pass
 
             updated_error = serializer.update(a_error, request.data)
             return Response(data=ErrorLogSerializer(updated_error).data, status=status.HTTP_200_OK)

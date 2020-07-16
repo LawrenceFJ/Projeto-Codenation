@@ -1,6 +1,6 @@
 from django.db import models
 from django.core.validators import validate_ipv46_address
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Group
 
 # Create your models here.
 LEVEL_CHOICES = [
@@ -53,6 +53,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser):
+    group = models.ManyToManyField(Group)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=255)
     active = models.BooleanField(default=True)
@@ -103,10 +104,29 @@ class User(AbstractBaseUser):
         return self.active
 
 
+class Agent(models.Model):
+    name = models.CharField(max_length=50)
+    user = models.ForeignKey(User, related_name='user', on_delete=models.CASCADE, null=False)
+    address = models.GenericIPAddressField(validators=[validate_ipv46_address], null=False)
+    status = models.BooleanField(default=False)
+    env = models.CharField(max_length=20)
+    version = models.CharField(max_length=5)
+
+    REQUIRED_FIELDS = ['name', 'user', 'address', 'env']
+
+    def __str__(self):
+        return f"{self.name}: {self.address}"
+
+    class Meta:
+        ordering = ['name']
+
+
 class ErrorLog(models.Model):
     description = models.CharField(max_length=100)
     details = models.TextField()
-    origin = models.GenericIPAddressField(validators=[validate_ipv46_address])
-    date = models.DateTimeField()
     level = models.CharField(max_length=20, choices=LEVEL_CHOICES)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, null=False)
+    data = models.DateTimeField(auto_now=True)
+    arquivado = models.BooleanField(default=False)
+
+    REQUIRED_FIELDS = ['agent', 'description', 'details', 'level']
