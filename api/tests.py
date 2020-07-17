@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from django.urls import reverse
 
@@ -219,6 +219,9 @@ class TestAgent(BaseViewTest):
         self.client.credentials(HTTP_AUTHORIZATION=token)
 
     def test_get_all_agents(self):
+        """
+        Test GET  /api/agents/
+        """
         agents = Agent.objects.all()
         serializer = AgentSerializer(agents, many=True)
 
@@ -228,6 +231,9 @@ class TestAgent(BaseViewTest):
         self.assertEqual(response.data, serializer.data)
 
     def test_get_agent_all_logs(self):
+        """
+        Test GET  /api/agents/:id/logs
+        """
         agent = Agent.objects.get(pk=1)
         logs = ErrorLog.objects.filter(agent=agent)
         serializer = ErrorLogSerializer(logs, many=True)
@@ -238,6 +244,9 @@ class TestAgent(BaseViewTest):
         self.assertEqual(response.data, serializer.data)
 
     def test_post_agent(self):
+        """
+        Test POST  /api/agents/
+        """
         agent = json.dumps({
             "name": "windows server",
             "user": 1,
@@ -251,6 +260,9 @@ class TestAgent(BaseViewTest):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_put_agent(self):
+        """
+        Test PUT  /api/agents/:id/
+        """
         agent = json.dumps({
             "name": "windows server updated",
             "user": 1,
@@ -264,6 +276,9 @@ class TestAgent(BaseViewTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_delete_agent(self):
+        """
+        Test DELETE  /api/agents/:id/
+        """
         response = self.client.delete(path='/api/agents/1/', content_type="application/json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)

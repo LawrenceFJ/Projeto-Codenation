@@ -17,10 +17,16 @@ jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
 
 
 def api_index(request):
+    """
+    Página de index do site.
+    """
     return render(request, 'index.html')
 
 
 def api_doc(request):
+    """
+    Página para a documentação da API em swagger.
+    """
     return render(request, 'swagger-doc.html')
 
 
@@ -39,17 +45,19 @@ class RegisterUser(generics.CreateAPIView):
         email = request.data.get("email", "")
         password = request.data.get("password", "")
         name = request.data.get("name", "")
-        try:
+
+        try:  # Testa se o email já existe no BD.
             user = User.objects.get(email=email)
             return Response(data={"Message": "User email already exist"}, status=status.HTTP_409_CONFLICT)
 
         except User.DoesNotExist:
             try:
-                validate_email(email)
+                validate_email(email)  # Valida o email, se for invalido gera um ValidationError.
                 new_user = User.objects.create_user(email=email, password=password, name=name)
                 serializer = UserSerializer(new_user)
                 return Response(data=serializer.data, status=status.HTTP_201_CREATED)
-            except (ValidationError, ValueError):
+
+            except (ValidationError, ValueError):  # ValueError é gerado se a senha for invalida.
                 return Response(data={"Message": "User must have an valid email, name and password"},
                                 status=status.HTTP_400_BAD_REQUEST)
 
@@ -63,15 +71,16 @@ class UserLogin(generics.CreateAPIView):
     serializer_class = UserSerializer
 
     def post(self, request, *args, **kwargs):
-        try:
+        try:  # Testa se o usuario existe no BD.
             user = self.queryset.get(email=request.data['email'])
         except User.DoesNotExist:
             return Response(data={'Message': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
 
         email = request.data['email']
         password = request.data['password']
-        user = authenticate(request, username=email, password=password)
+        user = authenticate(request, username=email, password=password)  # Validação do usuario.
 
+        # Se o usuario for valido, retorna o token.
         if user is not None:
             serializer = TokenSerializer(data={
                 "token": jwt_encode_handler(
@@ -86,6 +95,7 @@ class UserLogin(generics.CreateAPIView):
 class GetAllUsers(generics.ListAPIView):
     """
     GET api/users/
+    Retorna todos os usuario cadastrados.
     """
     permission_classes = (permissions.IsAuthenticated,)
     queryset = User.objects.all()
@@ -103,6 +113,13 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserSerializer
 
     def get(self, request, *args, **kwargs):
+        """
+        Retorna o usuario com id buscado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return User[]:
+        """
         try:
             a_user = User.objects.get(pk=kwargs['pk'])
             serializer = UserSerializer(a_user)
@@ -114,6 +131,14 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def put(self, request, *args, **kwargs):
+        """
+        Atualização das informações de um Usuario.
+        Retorna o usuario atualizado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return User[]:
+        """
         try:  # verifica se o usuario existe no banco.
             a_user = self.queryset.get(pk=kwargs['pk'])
 
@@ -141,6 +166,13 @@ class UserGetUpdateDelete(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def delete(self, request, *args, **kwargs):
+        """
+        Deleta o Usuário pelo id.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         try:
             a_user = self.queryset.get(pk=kwargs['pk'])
             a_user.delete()
@@ -166,6 +198,14 @@ class ListCreateAgent(generics.ListCreateAPIView):
     serializer_class = AgentSerializer
 
     def post(self, request, *args, **kwargs):
+        """
+        Registra um Agent no BD.
+        Retorna o Agent criado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return Agent[]:
+        """
         serializer = AgentSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -184,6 +224,14 @@ class GetUpdateDeleteAgent(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AgentSerializer
 
     def get(self, request, *args, **kwargs):
+        """
+        Busca um Agent com o determinado ID.
+        Retorna o Agent buscado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return Agent[]:
+        """
         try:
             a_agent = self.queryset.get(pk=kwargs['pk'])
             return Response(AgentSerializer(a_agent).data)
@@ -194,6 +242,14 @@ class GetUpdateDeleteAgent(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def put(self, request, *args, **kwargs):
+        """
+        Atualiza um Agent determinado pelo ID.
+        Retorna o Agent atualizado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return Agent[]:
+        """
         try:
             a_agent = self.queryset.get(pk=kwargs['pk'])
             serializer = AgentSerializer()
@@ -213,6 +269,13 @@ class GetUpdateDeleteAgent(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def delete(self, request, *args, **kwargs):
+        """
+        Deleta um Agent selecionado pelo ID.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         try:
             a_agent = self.queryset.get(pk=kwargs['pk'])
             a_agent.delete()
@@ -233,12 +296,20 @@ class ListAgentAllLogs(generics.ListAPIView):
     serializer_class = ErrorLogSerializer
 
     def get(self, request, *args, **kwargs):
+        """
+        Lista todos os Logs criados pelo Agent determinado pelo ID.
+        Retorna a lista de Logs.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return ErrorLog[]:
+        """
         query = self.queryset.filter(agent=kwargs['pk'])
         serializer = ErrorLogSerializer(query, many=True)
         if query:
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(
-            data={"Message": f"Agent with id={kwargs['pk']} does not exist."},
+            data={"Message": f"This agent does not have logs entries."},
             status=status.HTTP_404_NOT_FOUND
         )
 
@@ -258,6 +329,14 @@ class ListCreateLog(generics.ListCreateAPIView):
     serializer_class = ErrorLogSerializer
 
     def post(self, request, *args, **kwargs):
+        """
+        Registra um Log no BD.
+        Retorna o Log criado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return ErrorLog[]:
+        """
         serializer = ErrorLogSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
@@ -278,10 +357,17 @@ class GetUpdateDeleteLog(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ErrorLogSerializer
 
     def get(self, request, *args, **kwargs):
+        """
+        Se buscado pelo ID, retorna o Log especifico. Se buscado pelo level, retorna todos os Logs com aquele level.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return ErrorLog[]:
+        """
         LEVEL_CHOICES = ['critical', 'debug', 'error', 'warning', 'information']
 
         # GET errors/:level/
-        if kwargs['pk'] in LEVEL_CHOICES:
+        if kwargs['pk'] in LEVEL_CHOICES:  # kwargs['pk'] é um level_choice.
             a_error = self.queryset.filter(level=kwargs['pk'])
             serializer = ErrorLogSerializer(a_error, many=True)
             if not a_error:
@@ -292,7 +378,7 @@ class GetUpdateDeleteLog(generics.RetrieveUpdateDestroyAPIView):
             return Response(serializer.data)
 
         # GET errors/:id/
-        else:  # kwargs['pk'] is a number
+        else:  # kwargs['pk'] é um numero.
             try:
                 a_error = self.queryset.get(pk=kwargs['pk'])
                 return Response(ErrorLogSerializer(a_error).data)
@@ -303,6 +389,14 @@ class GetUpdateDeleteLog(generics.RetrieveUpdateDestroyAPIView):
                 )
 
     def put(self, request, *args, **kwargs):
+        """
+        Atualiza um Log especificado pelo ID.
+        Retorna o Log atualizado.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return ErrorLog[]:
+        """
         try:
             a_error = self.queryset.get(pk=kwargs['pk'])
             serializer = ErrorLogSerializer()
@@ -322,6 +416,13 @@ class GetUpdateDeleteLog(generics.RetrieveUpdateDestroyAPIView):
             )
 
     def delete(self, request, *args, **kwargs):
+        """
+        Delete um Log especificado pelo ID.
+        :param request:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         try:
             a_error = self.queryset.get(pk=kwargs['pk'])
             a_error.delete()
