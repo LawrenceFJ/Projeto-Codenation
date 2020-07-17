@@ -4,6 +4,7 @@ from rest_framework.views import status
 from rest_framework_jwt.settings import api_settings
 from django.contrib.auth import authenticate
 from django.core.validators import validate_email, ValidationError
+from django.shortcuts import render
 
 from .models import User, Agent, ErrorLog
 from .serializers import UserSerializer, AgentSerializer, ErrorLogSerializer, TokenSerializer
@@ -13,6 +14,14 @@ from .serializers import UserSerializer, AgentSerializer, ErrorLogSerializer, To
 
 jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
 jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
+
+
+def api_index(request):
+    return render(request, 'index.html')
+
+
+def api_doc(request):
+    return render(request, 'swagger-doc.html')
 
 
 ###########################################################

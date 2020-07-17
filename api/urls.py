@@ -2,8 +2,12 @@ from django.urls import path, re_path, include
 from .views import RegisterUser, UserLogin, GetAllUsers, UserGetUpdateDelete
 from .views import ListCreateLog, GetUpdateDeleteLog
 from .views import ListCreateAgent, GetUpdateDeleteAgent, ListAgentAllLogs
+from .views import api_index, api_doc
 
 urlpatterns = [
+    path('', api_index, name='api-index'),
+    path('docs/', api_doc),
+
     path('api/register/', RegisterUser.as_view(), name='register-user'),
     path('api/login/', UserLogin.as_view(), name='user-login'),
 
